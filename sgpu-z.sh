@@ -5,8 +5,10 @@
 #H
 #H  DESCRIPTION
 #H    This script is a simple approach to the GPU-Z program to show,
-#H  monitor and log the status of a NVIDIA GPU plus being able to
-#H  run some tests.
+#H  monitor and log the status of a GPUs. Now it support only NVIDIA GPUs.
+#H    It also allows control of some overclocking parameters, like power 
+#H  limit, gpu & memory frequency, even voltage if possible. And also create
+#H  a script to load the orverclocking parameters automatically.
 #H
 #H  USAGE
 #H    sgpu-z.sh [-h] [-d] -i value
@@ -51,7 +53,7 @@ trap clean_exit SIGHUP SIGINT SIGTERM
 #########################################################################
 readonly RK_SCRIPT=$0              # Store the script name for help() and doc() functions
 readonly RK_HAS_MANDATORY_ARGUMENTS="NO" #"YES" # or "NO"
-readonly TMPFILE=$(mktemp)      # Generate the temporary mask
+readonly TMPFILE=$(mktemp)         # Generate the temporary mask
 # Add the commands and libraries required for the script to run
 RK_DEPENDENCIES="sed grep tput stty tr setterm"
 RK_LIBRARIES=""
@@ -818,8 +820,6 @@ GPU_TEMP_SHUTDOWN=$(graphics_card gpu-temperature-shutdown)
 tput clear
 reset_sensor_stats
 
-
-
 #
 # Main Display Thread 
 #
@@ -875,7 +875,9 @@ reset_sensor_stats
         fi
         printf "Po${REVERSE}w${REVERSE_OFF}erMizer Mode: ${FG_GREEN}$POWERMIZER_MODE${STYLE_OFF}     Performance State: ${FG_GREEN}$PERFORMANCE_STATE${STYLE_OFF}  \n"
         
-        printf "${FG_LIGHTBLUE}----| ${REVERSE}R${REVERSE_OFF}eset Stats/Logs |-----| Sensors |--|N:$SAMPLE_COUNT|-------------------------${STYLE_OFF}\n"
+        ENDSTRING='---------------------'
+
+        printf "${FG_LIGHTBLUE}----| ${REVERSE}R${REVERSE_OFF}eset Stats/Logs |-----| Sensors |--|N:$SAMPLE_COUNT|${ENDSTRING:${#SAMPLE_COUNT}}${STYLE_OFF}\n"
         printf "GPU Clock: ${FG_GREEN}$GPU_CLOCK${FG_DEFAULT}  \tMax: ${FG_GREEN}$GPU_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $GPU_CLOCK_AVG
         printf "GPU Temp: ${FG_GREEN}$GPU_TEMP${STYLE_OFF}  \tMax: ${FG_GREEN}$GPU_TEMP_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_TEMP_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $GPU_TEMP_AVG
         printf "Mem.Clock: ${FG_GREEN}$MEMORY_CLOCK${STYLE_OFF}  \tMax: ${FG_GREEN}$MEMORY_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$MEMORY_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $MEMORY_CLOCK_AVG
