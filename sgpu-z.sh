@@ -618,8 +618,11 @@ reset_sensor_stats()
 update_sensor_stats()
 {
     # Main function code
-    if [ "${SAMPLE_COUNT:-}" == "" ]; then
+
+    # Reset stats if needed
+    if [ "${SAMPLE_COUNT:-}" == "" ] || [ -f /tmp/reset_sensor_stats ]; then
         reset_sensor_stats
+        rm -f /tmp/reset_sensor_stats
     fi
 
     GPU_CLOCK_N=$(echo $GPU_CLOCK | cut -f1 -d' ')
@@ -658,7 +661,7 @@ update_sensor_stats()
     fi
     POWER_GPU_AVG=$( echo "($POWER_GPU_AVG * $SAMPLE_COUNT + $POWER_GPU_N)/($SAMPLE_COUNT + 1)" | bc -l )
 
-    FAN_CURRENT_SPEED_N=$(echo $FAN_CURRENT_SPEED  | cut -f1 -d' ')
+    FAN_CURRENT_SPEED_N=$(echo $FAN_CURRENT_SPEED_RPM  | cut -f1 -d' ')
     if [ $FAN_CURRENT_SPEED_N -gt $FAN_CURRENT_SPEED_SMAX ]; then
         FAN_CURRENT_SPEED_SMAX=$FAN_CURRENT_SPEED_N
     fi
@@ -827,7 +830,7 @@ reset_sensor_stats
     while [ $DISPLAY_DATA -eq 1 ]; do
 
         # Reset the terminal and go to Home
-        tput cup 0 0
+        tput cup 0 0    
     
         # Graphics Card Dynamic Information to be refreshed
         PCI_INFO=$(graphics_card pci-info)
@@ -850,14 +853,15 @@ reset_sensor_stats
         FAN_CONTROL=$(graphics_card fan-control-get)
         FAN_TARGET_SPEED=$(graphics_card fan-target-speed-get)
         FAN_CURRENT_SPEED=$(graphics_card fan-current-speed)
+        FAN_CURRENT_SPEED_RPM=$(graphics_card fan-current-speed-rpm)
         update_sensor_stats
         
         # First we print static information
         printf "${FG_LIGHTBLUE}=============================|${BOLD} SGPU-Z ${STYLE_OFF}${FG_LIGHTBLUE}|============================${STYLE_OFF}\n"
-        printf "Vendor:${FG_GREEN} $CARD_VENDOR  ${FG_DEFAULT}Name:${FG_GREEN} $PRODUCT_NAME ${FG_DEFAULT} Driver Version:${FG_GREEN} $DRIVER_VERSION ${FG_DEFAULT}\n"
-        printf "VBIOS Version:${FG_GREEN} $VBIOS_VERSION${FG_DEFAULT}\tInfoROM Version:${FG_GREEN} $INFOROM_VERSION ${FG_DEFAULT}\n"
-        printf "Device ID:${FG_GREEN}$DEVICE_ID${FG_DEFAULT} SM:${FG_GREEN}$COMPUTING_CORES${FG_DEFAULT} SlowD.T:${FG_GREEN}$GPU_TEMP_SLOWDOWN${FG_DEFAULT} ShutD.T:${FG_GREEN}$GPU_TEMP_SHUTDOWN${STYLE_OFF}\n"
-        printf "Memory Size: ${FG_GREEN}$MEMORY_SIZE${STYLE_OFF} Bus Interface:${FG_GREEN} $PCI_INFO ${STYLE_OFF}\n"
+        printf "Vendor:${FG_GREEN} $CARD_VENDOR  ${FG_DEFAULT}Name:${FG_GREEN} $PRODUCT_NAME ${FG_DEFAULT} Driver Version:${FG_GREEN}$DRIVER_VERSION ${FG_DEFAULT}\n"
+        printf "VBIOS Version:${FG_GREEN} $VBIOS_VERSION ${FG_DEFAULT}\tInfoROM Version:${FG_GREEN} $INFOROM_VERSION ${FG_DEFAULT}\n"
+        printf "Dev. ID:${FG_GREEN} $DEVICE_ID ${FG_DEFAULT}SM:${FG_GREEN} $COMPUTING_CORES ${FG_DEFAULT}SlowD.T:${FG_GREEN}$GPU_TEMP_SLOWDOWN${FG_DEFAULT} ShutD.T:${FG_GREEN}$GPU_TEMP_SHUTDOWN${STYLE_OFF}\n"
+        printf "Memory Size:${FG_GREEN} $MEMORY_SIZE ${STYLE_OFF}Bus Interface:${FG_GREEN} ${PCI_INFO}${STYLE_OFF}\n"
     
         printf "${FG_LIGHTBLUE}---------------------------| Parameters |--------------------------${STYLE_OFF}\n"
         printf "${REVERSE}G${STYLE_OFF}PU Clock Offset: ${REVERSE}${FG_GREEN}$GPU_CLOCK_OFFSET${STYLE_OFF} \tMin: ${FG_GREEN}$GPU_CLOCK_OFFSET_MIN${STYLE_OFF} \tMax: ${FG_GREEN}$GPU_CLOCK_OFFSET_MAX${STYLE_OFF}  MaxClk: ${FG_GREEN}$GPU_CLOCK_MAX${STYLE_OFF}\n"
@@ -869,23 +873,24 @@ reset_sensor_stats
             printf "Power Limit: ${FG_GREEN}$POWER_LIMIT${FG_DEFAULT} \tMinimum: ${FG_GREEN}$POWER_MIN${STYLE_OFF}\tMaximum: ${FG_GREEN}$POWER_MAX${STYLE_OFF}\n"
         fi
         if [ $FAN_CONTROL == 0 ]; then
-            printf "${REVERSE}F${STYLE_OFF}an Control: ${REVERSE}${FG_GREEN}Disabled${STYLE_OFF} \t                               \n"
+            printf "${REVERSE}F${STYLE_OFF}an Control: ${REVERSE}${FG_GREEN}Disabled${STYLE_OFF}\t                                           \n"
         else
-            printf "${REVERSE}F${STYLE_OFF}an Control: ${REVERSE}${FG_GREEN}Enabled${STYLE_OFF} \t${REVERSE}T${STYLE_OFF}arget Fan Speed: ${REVERSE}${FG_GREEN}$FAN_TARGET_SPEED${STYLE_OFF} \n"
+            ENDSTRING='             '
+            FANSTR=$FAN_TARGET_SPEED$FAN_CURRENT_SPEED
+            printf "${REVERSE}F${STYLE_OFF}an Control: ${REVERSE}${FG_GREEN}Enabled${STYLE_OFF} \t${REVERSE}T${STYLE_OFF}arget Fan PWM: ${REVERSE}${FG_GREEN}$FAN_TARGET_SPEED${STYLE_OFF} Curr. Fan PWM: ${FG_GREEN}$FAN_CURRENT_SPEED${STYLE_OFF}${ENDSTRING:${#FANSTR}}\n"
         fi
-        printf "Po${REVERSE}w${REVERSE_OFF}erMizer Mode: ${FG_GREEN}$POWERMIZER_MODE${STYLE_OFF}     Performance State: ${FG_GREEN}$PERFORMANCE_STATE${STYLE_OFF}  \n"
+        printf "Po${REVERSE}w${REVERSE_OFF}erMizer Mode: ${FG_GREEN}$POWERMIZER_MODE${STYLE_OFF}     Performance State: ${FG_GREEN}$PERFORMANCE_STATE${STYLE_OFF} \n"
         
         ENDSTRING='---------------------'
-
         printf "${FG_LIGHTBLUE}----| ${REVERSE}R${REVERSE_OFF}eset Stats/Logs |-----| Sensors |--|N:$SAMPLE_COUNT|${ENDSTRING:${#SAMPLE_COUNT}}${STYLE_OFF}\n"
-        printf "GPU Clock: ${FG_GREEN}$GPU_CLOCK${FG_DEFAULT}  \tMax: ${FG_GREEN}$GPU_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $GPU_CLOCK_AVG
-        printf "GPU Temp: ${FG_GREEN}$GPU_TEMP${STYLE_OFF}  \tMax: ${FG_GREEN}$GPU_TEMP_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_TEMP_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $GPU_TEMP_AVG
-        printf "Mem.Clock: ${FG_GREEN}$MEMORY_CLOCK${STYLE_OFF}  \tMax: ${FG_GREEN}$MEMORY_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$MEMORY_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $MEMORY_CLOCK_AVG
-        printf "Power GPU: ${FG_GREEN}$POWER_GPU  ${STYLE_OFF}  \tMax: ${FG_GREEN}$POWER_GPU_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$POWER_GPU_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $POWER_GPU_AVG
-        printf "Fan Speed: ${FG_GREEN}$FAN_CURRENT_SPEED  ${STYLE_OFF}  \tMax: ${FG_GREEN}$FAN_CURRENT_SPEED_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$FAN_CURRENT_SPEED_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $FAN_CURRENT_SPEED_AVG
-        printf "GPU Usage: ${FG_GREEN}$GPU_USAGE  ${STYLE_OFF}  \tMax: ${FG_GREEN}$GPU_USAGE_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_USAGE_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $GPU_USAGE_AVG
-        printf "Memory Usage: ${FG_GREEN}$MEMORY_USAGE  ${STYLE_OFF}  \tMax: ${FG_GREEN}$MEMORY_USAGE_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$MEMORY_USAGE_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $MEMORY_USAGE_AVG
-        printf "Core Voltage: ${FG_GREEN}$CORE_VOLTAGE${STYLE_OFF}\tMax: ${FG_GREEN}$CORE_VOLTAGE_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$CORE_VOLTAGE_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f      ${STYLE_OFF}\n" $CORE_VOLTAGE_AVG
+        printf "GPU Clock: ${FG_GREEN}$GPU_CLOCK${FG_DEFAULT}  \tMax: ${FG_GREEN}$GPU_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $GPU_CLOCK_AVG
+        printf "GPU Temp: ${FG_GREEN}$GPU_TEMP${STYLE_OFF}  \tMax: ${FG_GREEN}$GPU_TEMP_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_TEMP_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f  ${STYLE_OFF}\n" $GPU_TEMP_AVG
+        printf "Mem.Clock: ${FG_GREEN}$MEMORY_CLOCK${STYLE_OFF}  \tMax: ${FG_GREEN}$MEMORY_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$MEMORY_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $MEMORY_CLOCK_AVG
+        printf "Power GPU: ${FG_GREEN}$POWER_GPU  ${STYLE_OFF}  \tMax: ${FG_GREEN}$POWER_GPU_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$POWER_GPU_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f  ${STYLE_OFF}\n" $POWER_GPU_AVG
+        printf "Fan Speed: ${FG_GREEN}$FAN_CURRENT_SPEED_RPM  ${STYLE_OFF}  \tMax: ${FG_GREEN}$FAN_CURRENT_SPEED_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$FAN_CURRENT_SPEED_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $FAN_CURRENT_SPEED_AVG
+        printf "GPU Usage: ${FG_GREEN}$GPU_USAGE  ${STYLE_OFF}  \tMax: ${FG_GREEN}$GPU_USAGE_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_USAGE_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $GPU_USAGE_AVG
+        printf "Memory Usage: ${FG_GREEN}$MEMORY_USAGE  ${STYLE_OFF}  \tMax: ${FG_GREEN}$MEMORY_USAGE_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$MEMORY_USAGE_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $MEMORY_USAGE_AVG
+        printf "Core Voltage:${FG_GREEN}$CORE_VOLTAGE${STYLE_OFF}\tMax:${FG_GREEN}$CORE_VOLTAGE_SMAX${FG_DEFAULT}  \tMin:${FG_GREEN}$CORE_VOLTAGE_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f  ${STYLE_OFF}\n" $CORE_VOLTAGE_AVG
         printf "${FG_LIGHTBLUE}-------------------------------------------------------------------${STYLE_OFF}\n"
         printf "GPU Throttle:                                                      \r"
         printf "GPU Throttle:${FG_GREEN}$GPU_THROTTLE${STYLE_OFF}\n"
@@ -954,6 +959,9 @@ while [ $DISPLAY_DATA -eq 1 ]; do
                 ;;
             w)
                 graphics_card powermizer-mode-set $(( $(graphics_card powermizer-mode-raw) - 1 )) > $TMPFILE.log
+                ;;
+            r|R)
+                touch /tmp/reset_sensor_stats
                 ;;
         esac
     fi
