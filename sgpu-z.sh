@@ -8,7 +8,7 @@
 #H  monitor and log the status of a GPUs. Now it support only NVIDIA GPUs.
 #H    It also allows control of some overclocking parameters, like power 
 #H  limit, gpu & memory frequency, even voltage if possible. And also create
-#H  a script to load the orverclocking parameters automatically.
+#H  a script to load the overclocking parameters automatically.
 #H
 #H  USAGE
 #H    sgpu-z.sh [-h] [-d] -i value
@@ -110,6 +110,8 @@ readonly BG_DEFAULT="\e[49m"
 
 # Default Variables for command line
 export DISPLAY_DATA=1
+export LOGGING="OFF"
+echo "$LOGGING" > $TMPFILE-logging # Used to share the status across threads
 
 #########################################################################
 # BASIC FUNCTIONS FOR ALL SCRIPTS
@@ -132,6 +134,8 @@ clean_exit() {
 
     export DISPLAY_DATA=0
     setterm -cursor on
+    clear
+
     printf "\n${FG_GREEN}>> Cleaning up ... ${STYLE_OFF}"
     if [ "${1:-}" == "" ]; then
         exit_code=0
@@ -141,7 +145,7 @@ clean_exit() {
     if [[ ${TMPFILE:-} != "" ]]; then
         rm -f ${TMPFILE:-}*
     fi
-    printf "DONE !\n"
+    printf "DONE !\n\n"
 
     exit $exit_code
 }
@@ -620,9 +624,9 @@ update_sensor_stats()
     # Main function code
 
     # Reset stats if needed
-    if [ "${SAMPLE_COUNT:-}" == "" ] || [ -f /tmp/reset_sensor_stats ]; then
+    if [ "${SAMPLE_COUNT:-}" == "" ] || [ -f $TMPFILE-reset_sensor_stats ]; then
         reset_sensor_stats
-        rm -f /tmp/reset_sensor_stats
+        rm -f $TMPFILE-reset_sensor_stats
     fi
 
     GPU_CLOCK_N=$(echo $GPU_CLOCK | cut -f1 -d' ')
@@ -863,7 +867,7 @@ reset_sensor_stats
         printf "Dev. ID:${FG_GREEN} $DEVICE_ID ${FG_DEFAULT}SM:${FG_GREEN} $COMPUTING_CORES ${FG_DEFAULT}SlowD.T:${FG_GREEN}$GPU_TEMP_SLOWDOWN${FG_DEFAULT} ShutD.T:${FG_GREEN}$GPU_TEMP_SHUTDOWN${STYLE_OFF}\n"
         printf "Memory Size:${FG_GREEN} $MEMORY_SIZE ${STYLE_OFF}Bus Interface:${FG_GREEN} ${PCI_INFO}${STYLE_OFF}\n"
     
-        printf "${FG_LIGHTBLUE}---------------------------| Parameters |--------------------------${STYLE_OFF}\n"
+        printf "${FG_LIGHTBLUE}---------------------------| PARAMETERS |--------------------------${STYLE_OFF}\n"
         printf "${REVERSE}G${STYLE_OFF}PU Clock Offset: ${REVERSE}${FG_GREEN}$GPU_CLOCK_OFFSET${STYLE_OFF} \tMin: ${FG_GREEN}$GPU_CLOCK_OFFSET_MIN${STYLE_OFF} \tMax: ${FG_GREEN}$GPU_CLOCK_OFFSET_MAX${STYLE_OFF}  MaxClk: ${FG_GREEN}$GPU_CLOCK_MAX${STYLE_OFF}\n"
         printf "${REVERSE}M${STYLE_OFF}em.Clock Offset: ${REVERSE}${FG_GREEN}$MEMORY_CLOCK_OFFSET${STYLE_OFF} \tMin: ${FG_GREEN}$MEMORY_CLOCK_OFFSET_MIN${STYLE_OFF} \tMax: ${FG_GREEN}$MEMORY_CLOCK_OFFSET_MAX${STYLE_OFF}  MaxClk: ${FG_GREEN}$MEMORY_CLOCK_MAX${STYLE_OFF}\n"
         printf "Core ${REVERSE}V${REVERSE_OFF}.Offset: ${REVERSE}${FG_GREEN}$CORE_VOLTAGE_OFFSET${STYLE_OFF} \tMin: ${FG_GREEN}$CORE_VOLTAGE_MIN_OFFSET${FG_DEFAULT}\tMax: ${FG_GREEN}$CORE_VOLTAGE_MAX_OFFSET${STYLE_OFF} \n"
@@ -881,8 +885,9 @@ reset_sensor_stats
         fi
         printf "Po${REVERSE}w${REVERSE_OFF}erMizer Mode: ${FG_GREEN}$POWERMIZER_MODE${STYLE_OFF}     Performance State: ${FG_GREEN}$PERFORMANCE_STATE${STYLE_OFF} \n"
         
-        ENDSTRING='---------------------'
-        printf "${FG_LIGHTBLUE}----| ${REVERSE}R${REVERSE_OFF}eset Stats/Logs |-----| Sensors |--|N:$SAMPLE_COUNT|${ENDSTRING:${#SAMPLE_COUNT}}${STYLE_OFF}\n"
+        LOGGING=$(cat $TMPFILE-logging) # Recover the logging status
+        ENDSTRING='---------'  # To make the end of line aligned taking into account the number of samples
+        printf "${FG_LIGHTBLUE}----| ${REVERSE}R${REVERSE_OFF}eset Stats/Logs |----| SENSORS |--| ${REVERSE}L${REVERSE_OFF}ogs:$LOGGING |-|N:$SAMPLE_COUNT|${ENDSTRING:${#SAMPLE_COUNT}}${STYLE_OFF}\n"
         printf "GPU Clock: ${FG_GREEN}$GPU_CLOCK${FG_DEFAULT}  \tMax: ${FG_GREEN}$GPU_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $GPU_CLOCK_AVG
         printf "GPU Temp: ${FG_GREEN}$GPU_TEMP${STYLE_OFF}  \tMax: ${FG_GREEN}$GPU_TEMP_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$GPU_TEMP_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.1f  ${STYLE_OFF}\n" $GPU_TEMP_AVG
         printf "Mem.Clock: ${FG_GREEN}$MEMORY_CLOCK${STYLE_OFF}  \tMax: ${FG_GREEN}$MEMORY_CLOCK_SMAX${FG_DEFAULT}  \tMin: ${FG_GREEN}$MEMORY_CLOCK_SMIN${FG_DEFAULT}  \tAvg: ${FG_GREEN}%0.0f  ${STYLE_OFF}\n" $MEMORY_CLOCK_AVG
@@ -961,7 +966,16 @@ while [ $DISPLAY_DATA -eq 1 ]; do
                 graphics_card powermizer-mode-set $(( $(graphics_card powermizer-mode-raw) - 1 )) > $TMPFILE.log
                 ;;
             r|R)
-                touch /tmp/reset_sensor_stats
+                touch $TMPFILE-reset_sensor_stats
+                ;;
+            l|L)
+                LOGGING=$(cat $TMPFILE-logging) # Recover the logging status
+                if [ "$LOGGING" == "OFF" ]; then
+                    export LOGGING="ON "
+                else
+                    export LOGGING="OFF"
+                fi
+                echo "$LOGGING" > $TMPFILE-logging # Used to share the status across threads
                 ;;
         esac
     fi
