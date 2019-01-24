@@ -7,7 +7,7 @@
 #H    This script is a simple approach to the GPU-Z program to show,
 #H  monitor and log the status of a GPUs. Now it support only NVIDIA GPUs.
 #H    It also allows control of some overclocking parameters, like power 
-#H  limit, gpu & memory frequency, even voltage if possible. And also create
+#H  limit, gpu & memory frequency, even voltage if possible. And also creates
 #H  a script to load the overclocking parameters automatically.
 #H
 #H  USAGE
