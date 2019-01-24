@@ -55,7 +55,7 @@ readonly RK_SCRIPT=$0              # Store the script name for help() and doc() 
 readonly RK_HAS_MANDATORY_ARGUMENTS="NO" #"YES" # or "NO"
 readonly TMPFILE=$(mktemp)         # Generate the temporary mask
 # Add the commands and libraries required for the script to run
-RK_DEPENDENCIES="sed grep tput stty tr setterm"
+RK_DEPENDENCIES="sed grep tput stty tr setterm glxinfo"
 RK_LIBRARIES=""
 
 # CODES FOR TERMINAL - Optimized for compatibility - use printf also for better compatibility
@@ -132,16 +132,16 @@ echoerr() {
 clean_exit() {
     local exit_code
 
-    export DISPLAY_DATA=0
+    export DISPLAY_DATA=0	
     setterm -cursor on
-    clear
-
-    printf "\n${FG_GREEN}>> Cleaning up ... ${STYLE_OFF}"
+    
     if [ "${1:-}" == "" ]; then
         exit_code=0
     else
         exit_code=$(( $1 ))
     fi
+
+    printf "\n${FG_GREEN}>> [$exit_code] Cleaning up ... ${STYLE_OFF}"
     if [[ ${TMPFILE:-} != "" ]]; then
         rm -f ${TMPFILE:-}*
     fi
@@ -290,12 +290,23 @@ graphics_card()
                     nvsmi -q | tr -s '\n' > $tmpfile
                     nvsettings -q all | tr -s '\n' >> $tmpfile
 
+		    # Locate xorg.conf
+		    XORGCONFFILE=$(grep xorg.conf /var/log/Xorg.$(echo $DISPLAY | cut -f2 -d":").log | cut -f2 -d"\"")
+                    echo ">> X Configuration from $XORGCONFFILE !"
+		    if [ -d $XORGCONFFILE ]; then
+			XORGCONFFILE=$XORGCONFFILE/xorg.conf
+		    fi
+		    if [ ! -e $XORGCONFFILE ]; then
+			    sudo touch $XORGCONFFILE
+		    fi
+                    echo ">> Setting X Configuration to $XORGCONFFILE !"
+
                     # Check if there is Coolbits enabled
-                    if [ "$(grep -i coolbits /etc/X11/xorg.conf) " == " " ]; then
-                        echo "No coolbits in Xorg.conf !"
+                    if [ "$(grep -i coolbits $XORGCONFFILE ) " == " " ]; then
+                        echo ">> No coolbits in Xorg.conf !"
                         coolbits=0
                     else
-                        coolbits=$(( $(grep -i coolbits /etc/X11/xorg.conf | tr -s ' ' | tr -d '"' | cut -f4 -d ' ') ))
+                        coolbits=$(( $(grep -i coolbits $XORGCONFFILE | tr -s ' ' | tr -d '"' | cut -f4 -d ' ') ))
                     fi
 
                     # Check if Coolbits have all the desired values
@@ -304,7 +315,7 @@ graphics_card()
                         read answer
                         printf "${STYLE_OFF}\n"
                         if [ "$answer" == "" ] || [ "$answer" == "Y" ] || [ "$answer" == "y" ]; then
-                            sudo nvidia-xconfig --cool-bits=28
+                            sudo nvidia-xconfig --cool-bits=28 -c $XORGCONFFILE -o $XORGCONFFILE --allow-empty-initial-configuration
                             printf "${FG_GREEN}Please re-start X Server to make it work :) !${STYLE_OFF}\n\n"
                             clean_exit 0
                         fi
@@ -312,7 +323,7 @@ graphics_card()
 
                     # We will check which chip we have to set the correct overclocking attribute
                     if [ "${GPU_CLOCK_OFFSET_ATTRIBUTE:-}" == "" ]; then
-                        if [ "$(nvsettings -q [gpu:0]/GPUGraphicsClockOffsetAllPerformanceLevels)" != "" ] ; then
+                        if [ "$(nvsettings -q [gpu:$ID_GPU]/GPUGraphicsClockOffsetAllPerformanceLevels)" != "" ] ; then
                             # Seems to be a Pascal Chip or upper: we can change the offset of all performance levels
                             printf "${FG_GREEN}Seems to be a Pascal or upper Chip: we can Overclock all levels !!! ..  ${STYLE_OFF}\n"
                             GPU_CLOCK_OFFSET_ATTRIBUTE="GPUGraphicsClockOffsetAllPerformanceLevels"
@@ -325,15 +336,15 @@ graphics_card()
                         fi
 
                         # Get an store the Clock/Memory Offset max/min values
-                        GPU_CLOCK_OFFSET_MIN=$(nvsettings -q [gpu:0]/$GPU_CLOCK_OFFSET_ATTRIBUTE | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f1 -d'('| tr -d ' ')
-                        GPU_CLOCK_OFFSET_MAX=$(nvsettings -q [gpu:0]/$GPU_CLOCK_OFFSET_ATTRIBUTE |tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f2 -d'('| tr -d ' ')
-                        MEMORY_CLOCK_OFFSET_MIN=$(nvsettings -q [gpu:0]/$MEMORY_CLOCK_OFFSET_ATTRIBUTE |tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f1 -d'('| tr -d ' ')
-                        MEMORY_CLOCK_OFFSET_MAX=$(nvsettings -q [gpu:0]/$MEMORY_CLOCK_OFFSET_ATTRIBUTE | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f2 -d'('| tr -d ' ')
+                        GPU_CLOCK_OFFSET_MIN=$(nvsettings -q [gpu:$ID_GPU]/$GPU_CLOCK_OFFSET_ATTRIBUTE | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f1 -d'('| tr -d ' ')
+                        GPU_CLOCK_OFFSET_MAX=$(nvsettings -q [gpu:$ID_GPU]/$GPU_CLOCK_OFFSET_ATTRIBUTE |tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f2 -d'('| tr -d ' ')
+                        MEMORY_CLOCK_OFFSET_MIN=$(nvsettings -q [gpu:$ID_GPU]/$MEMORY_CLOCK_OFFSET_ATTRIBUTE |tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f1 -d'('| tr -d ' ')
+                        MEMORY_CLOCK_OFFSET_MAX=$(nvsettings -q [gpu:$ID_GPU]/$MEMORY_CLOCK_OFFSET_ATTRIBUTE | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f2 -d'('| tr -d ' ')
                     fi
 
                     # Check if modifying the voltage is possible
                     if [ "${GPU_VOLTAGE_AVAILABLE:-}" == "" ]; then
-                        if [ "$(nvsettings -q [gpu:0]/GPUOverVoltageOffset | tr -d '\n' )" == "" ]; then
+                        if [ "$(nvsettings -q [gpu:$ID_GPU]/GPUOverVoltageOffset | tr -d '\n' )" == "" ]; then
                             printf "${FG_GREEN}Voltage Control seems NOT available :( ${STYLE_OFF}\n"
                             GPU_VOLTAGE_AVAILABLE=FALSE
                             CORE_VOLTAGE_MIN_OFFSET="N/A"
@@ -341,8 +352,8 @@ graphics_card()
                         else
                             printf "${FG_GREEN}Voltage Control seems IS available :) ${STYLE_OFF}\n"
                             GPU_VOLTAGE_AVAILABLE=TRUE
-                            CORE_VOLTAGE_MIN_OFFSET=$(printf "%0.1f mV\n" $(echo "$(nvsettings -q [gpu:0]/GPUOverVoltageOffset | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f1 -d'('| tr -d ' ')/1000"| bc -l) )
-                            CORE_VOLTAGE_MAX_OFFSET=$(printf "%0.1f mV\n" $(echo "$(nvsettings -q [gpu:0]/GPUOverVoltageOffset | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f2 -d'('| tr -d ' ')/1000"| bc -l) )
+                            CORE_VOLTAGE_MIN_OFFSET=$(printf "%0.1f mV\n" $(echo "$(nvsettings -q [gpu:$ID_GPU]/GPUOverVoltageOffset | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f1 -d'('| tr -d ' ')/1000"| bc -l) )
+                            CORE_VOLTAGE_MAX_OFFSET=$(printf "%0.1f mV\n" $(echo "$(nvsettings -q [gpu:$ID_GPU]/GPUOverVoltageOffset | tr -d '\n' | tr -s ' '| grep range | sed 's/range/#/' | cut -f2 -d'#' | sed 's/ \- /(/' | cut -f2 -d'('| tr -d ' ')/1000"| bc -l) )
                         fi
                     fi
                     printf "${FG_GREEN}Initialization and Check OK :D !!${FG_DEFAULT}"
@@ -366,7 +377,7 @@ graphics_card()
                     nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=memory.total
                     ;;
                 pci-info)
-                    echo "PCI-E $(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.gen.max).0x$(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.width.max) @ $(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.gen.current).0x$(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.width.current) $(echo "scale=1;$(nvsettings -t -q [gpu:0]/PCIECurrentLinkSpeed)/1000" | bc -l)GT/s"
+                    echo "PCI-E $(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.gen.max).0x$(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.width.max) @ $(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.gen.current).0x$(nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=pcie.link.width.current) $(echo "scale=1;$(nvsettings -t -q [gpu:$ID_GPU]/PCIECurrentLinkSpeed)/1000" | bc -l)GT/s"
                     ;;
                 power-gpu)
                     nvsmi -i $ID_GPU  --format=csv,noheader --query-gpu=power.draw
@@ -438,7 +449,7 @@ graphics_card()
                     ;;
                 core-voltage)
                     if [ $GPU_VOLTAGE_AVAILABLE == TRUE ]; then
-                        printf "%0.1f mV\n" $(echo "$(nvsettings -t -q [gpu:0]/GPUCurrentCoreVoltage)/1000" | bc -l)
+                        printf "%0.1f mV\n" $(echo "$(nvsettings -t -q [gpu:$ID_GPU]/GPUCurrentCoreVoltage)/1000" | bc -l)
                     else
                         echo " 0 "
                     fi
@@ -523,7 +534,12 @@ graphics_card()
                     echo $(nvsettings -t -q [fan:$ID_GPU]/GPUCurrentFanSpeed) "%%"
                     ;;
                 fan-current-speed-rpm)
-                    echo $(nvsettings -t -q [fan:$ID_GPU]/GPUCurrentFanSpeedRPM) "RPM"
+		    TMPRPM=$(( $(nvsettings -t -q [fan:$ID_GPU]/GPUCurrentFanSpeedRPM) ))
+		    # Filter some aberrant readings in some cards
+		    if [ $TMPRPM -gt 5000 ]; then
+			    TMPRPM=$FAN_CURRENT_SPEED_RPM
+	            fi
+                    echo "$TMPRPM RPM"
                     ;;
                 *)
                     echo "N/A"
@@ -748,6 +764,9 @@ else
   done
 fi
 
+# Check if we have all the required commands
+check_dependencies
+
 # Check for Display settings
 echo ">> Checking Display variables ..."
 if [ "${DISPLAY:-}" == "" ]; then
@@ -786,16 +805,16 @@ fi
 # According to the vendor, assign the required utilities
 case "$CARD_VENDOR" in
     NVIDIA)
-        RK_DEPENDENCIES=$RK_DEPENDENCIES" nvidia-smi nvidia-settings nvidia-xconfig"
+        RK_DEPENDENCIES="nvidia-smi nvidia-settings nvidia-xconfig"
         ;;
     *)
         echoerr "** ERROR **: Card Vendor $CARD_VENDOR is not (yet) supported !"
         clean_exit -1
         ;;
 esac
-
 # Check if we have all the required commands
 check_dependencies
+
 
 # Check the graphics card access
 echo ">> Initialization and Checking Graphics Card access ..."
