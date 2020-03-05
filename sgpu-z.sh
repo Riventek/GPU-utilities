@@ -8,7 +8,8 @@
 #H  monitor and log the status of a GPUs. Now it support only NVIDIA GPUs.
 #H    It also allows control of some overclocking parameters, like power 
 #H  limit, gpu & memory frequency, even voltage if possible. And also creates
-#H  a script to load the overclocking parameters automatically.
+#H  a script to load the overclocking parameters automatically. It only uses
+#H the NVIDIA tools: nvidia-smi, nvidia-settings
 #H
 #H  USAGE
 #H    sgpu-z.sh [-h] [-d] -i value
